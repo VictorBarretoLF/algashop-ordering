@@ -1,4 +1,4 @@
-package com.algaworks.algashop.ordering.domain.valueobject;
+package com.algaworks.algashop.ordering.domain.valueobject.id;
 
 import com.algaworks.algashop.ordering.domain.utility.IdGenerator;
 import java.util.Objects;
@@ -19,4 +19,5 @@ public record CustomerId(UUID value) {
     public String toString() {
         return value.toString();
     }
+
 }
