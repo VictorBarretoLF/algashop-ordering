@@ -2,12 +2,14 @@ package com.algaworks.algashop.ordering.domain.entity;
 
 import com.algaworks.algashop.ordering.domain.exception.OrderInvalidShippingDeliveryDateException;
 import com.algaworks.algashop.ordering.domain.exception.OrderStatusCannotBeChangedException;
+import com.algaworks.algashop.ordering.domain.exception.ProductOutOfStockException;
 import com.algaworks.algashop.ordering.domain.valueobject.Address;
 import com.algaworks.algashop.ordering.domain.valueobject.BillingInfo;
 import com.algaworks.algashop.ordering.domain.valueobject.Document;
 import com.algaworks.algashop.ordering.domain.valueobject.FullName;
 import com.algaworks.algashop.ordering.domain.valueobject.Money;
 import com.algaworks.algashop.ordering.domain.valueobject.Phone;
+import com.algaworks.algashop.ordering.domain.valueobject.Product;
 import com.algaworks.algashop.ordering.domain.valueobject.ProductName;
 import com.algaworks.algashop.ordering.domain.valueobject.Quantity;
 import com.algaworks.algashop.ordering.domain.valueobject.ShippingInfo;
@@ -17,6 +19,7 @@ import com.algaworks.algashop.ordering.domain.valueobject.id.ProductId;
 import java.time.LocalDate;
 import java.util.Set;
 import org.assertj.core.api.Assertions;
+import org.assertj.core.api.ThrowableAssert;
 import org.junit.jupiter.api.Test;
 
 class OrderTest {
@@ -29,14 +32,10 @@ class OrderTest {
     @Test
     public void shouldAddItem() {
         Order order = Order.draft(new CustomerId());
-        ProductId productId = new ProductId();
+        Product product = ProductTestDataBuilder.aProductAltMousePad().build();
+        ProductId productId = product.id();
 
-        order.addItem(
-                productId,
-                new ProductName("Mouse pad"),
-                new Money("100"),
-                new Quantity(1)
-        );
+        order.addItem(product, new Quantity(1));
 
         Assertions.assertThat(order.items().size()).isEqualTo(1);
 
@@ -44,7 +43,7 @@ class OrderTest {
 
         Assertions.assertWith(orderItem,
                 (i) -> Assertions.assertThat(i.id()).isNotNull(),
-                (i) -> Assertions.assertThat(i.productName()).isEqualTo(new ProductName("Mouse pad")),
+                (i) -> Assertions.assertThat(i.productName()).isEqualTo(new ProductName("Mouse Pad")),
                 (i) -> Assertions.assertThat(i.productId()).isEqualTo(productId),
                 (i) -> Assertions.assertThat(i.price()).isEqualTo(new Money("100")),
                 (i) -> Assertions.assertThat(i.quantity()).isEqualTo(new Quantity(1))
@@ -54,14 +53,9 @@ class OrderTest {
     @Test
     public void shouldGenerateExceptionWhenTryToChangeItemSet() {
         Order order = Order.draft(new CustomerId());
-        ProductId productId = new ProductId();
+        Product product = ProductTestDataBuilder.aProductAltMousePad().build();
 
-        order.addItem(
-                productId,
-                new ProductName("Mouse pad"),
-                new Money("100"),
-                new Quantity(1)
-        );
+        order.addItem(product, new Quantity(1));
 
         Set<OrderItem> items = order.items();
 
@@ -72,23 +66,18 @@ class OrderTest {
     @Test
     public void shouldCalculateTotals() {
         Order order = Order.draft(new CustomerId());
-        ProductId productId = new ProductId();
 
         order.addItem(
-                productId,
-                new ProductName("Mouse pad"),
-                new Money("100"),
+                ProductTestDataBuilder.aProductAltMousePad().build(),
                 new Quantity(2)
         );
 
         order.addItem(
-                productId,
-                new ProductName("RAM Memory"),
-                new Money("50"),
+                ProductTestDataBuilder.aProductAltRamMemory().build(),
                 new Quantity(1)
         );
 
-        Assertions.assertThat(order.totalAmount()).isEqualTo(new Money("250"));
+        Assertions.assertThat(order.totalAmount()).isEqualTo(new Money("400"));
         Assertions.assertThat(order.totalItems()).isEqualTo(new Quantity(3));
     }
 
@@ -209,6 +198,37 @@ class OrderTest {
 
         Assertions.assertThatExceptionOfType(OrderInvalidShippingDeliveryDateException.class)
                 .isThrownBy(()-> order.changeShipping(shippingInfo, shippingCost, expectedDeliveryDate));
+    }
+
+    @Test
+    public void givenDraftOrder_whenChangeItem_shouldRecalculate() {
+        Order order = Order.draft(new CustomerId());
+
+        order.addItem(
+                ProductTestDataBuilder.aProductAltMousePad().build(),
+                new Quantity(3)
+        );
+
+        OrderItem orderItem = order.items().iterator().next();
+
+        order.changeItemQuantity(orderItem.id(), new Quantity(5));
+
+        Assertions.assertWith(order,
+                (o) -> Assertions.assertThat(o.totalAmount()).isEqualTo(new Money("500")),
+                (o) -> Assertions.assertThat(o.totalItems()).isEqualTo(new Quantity(5))
+        );
+    }
+
+    @Test
+    public void givenOutOfStockProduct_whenTryToAddToAnOrder_shouldNotAllow() {
+        Order order = Order.draft(new CustomerId());
+
+        ThrowableAssert.ThrowingCallable addItemTask = () -> order.addItem(
+                ProductTestDataBuilder.aProductUnavailable().build(),
+                new Quantity(1)
+        );
+
+        Assertions.assertThatExceptionOfType(ProductOutOfStockException.class).isThrownBy(addItemTask);
     }
 
 }
